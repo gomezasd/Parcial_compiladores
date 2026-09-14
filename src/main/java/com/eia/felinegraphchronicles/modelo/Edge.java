@@ -20,3 +20,5 @@ public record Edge(int from, int to, long weight) implements Comparable<Edge> {
         return Long.compare(this.weight, other.weight);
     }
 }
+
+

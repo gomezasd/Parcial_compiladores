@@ -99,40 +99,102 @@ public final class GraphRenderer extends JPanel {
     }
 
     private void drawEdges(Graphics2D g2, Point[] positions, Set<String> highlightedEdges) {
+        Set<String> bidirectionalPairs = findBidirectionalPairs();
+
         for (Edge edge : graph.edges()) {
             boolean highlighted = highlightedEdges.contains(edge.from() + "->" + edge.to());
             g2.setColor(highlighted
                     ? (highlightIsCycle ? new Color(230, 140, 30) : new Color(60, 160, 110))
                     : new Color(210, 210, 210));
             g2.setStroke(new BasicStroke(highlighted ? 2.5f : 1f));
-            drawArrow(g2, positions[edge.from()], positions[edge.to()]);
+
+            Point from = positions[edge.from()];
+            Point to = positions[edge.to()];
+            double offset = bidirectionalPairs.contains(pairKey(edge.from(), edge.to())) ? 8 : 0;
+
+            drawArrow(g2, from, to, offset);
+            drawWeightLabel(g2, from, to, edge.weight(), highlighted, offset);
         }
     }
 
-    private void drawArrow(Graphics2D g2, Point from, Point to) {
-        g2.drawLine(from.x, from.y, to.x, to.y);
+    private static final int NODE_RADIUS = 16; // debe coincidir con el radio usado en drawNodes
+
+    private void drawArrow(Graphics2D g2, Point from, Point to, double offset) {
         double angle = Math.atan2(to.y - from.y, to.x - from.x);
-        int arrowSize = 8;
-        int x1 = (int) (to.x - arrowSize * Math.cos(angle - Math.PI / 6));
-        int y1 = (int) (to.y - arrowSize * Math.sin(angle - Math.PI / 6));
-        int x2 = (int) (to.x - arrowSize * Math.cos(angle + Math.PI / 6));
-        int y2 = (int) (to.y - arrowSize * Math.sin(angle + Math.PI / 6));
-        g2.drawLine(to.x, to.y, x1, y1);
-        g2.drawLine(to.x, to.y, x2, y2);
+        double perpAngle = angle + Math.PI / 2;
+        int offX = (int) (offset * Math.cos(perpAngle));
+        int offY = (int) (offset * Math.sin(perpAngle));
+
+        int fx = from.x + offX;
+        int fy = from.y + offY;
+        int tx = to.x + offX;
+        int ty = to.y + offY;
+
+        int endX = (int) (tx - NODE_RADIUS * Math.cos(angle));
+        int endY = (int) (ty - NODE_RADIUS * Math.sin(angle));
+        int startX = (int) (fx + NODE_RADIUS * Math.cos(angle));
+        int startY = (int) (fy + NODE_RADIUS * Math.sin(angle));
+
+        g2.drawLine(startX, startY, endX, endY);
+
+        int arrowSize = 10;
+        int x1 = (int) (endX - arrowSize * Math.cos(angle - Math.PI / 6));
+        int y1 = (int) (endY - arrowSize * Math.sin(angle - Math.PI / 6));
+        int x2 = (int) (endX - arrowSize * Math.cos(angle + Math.PI / 6));
+        int y2 = (int) (endY - arrowSize * Math.sin(angle + Math.PI / 6));
+        g2.drawLine(endX, endY, x1, y1);
+        g2.drawLine(endX, endY, x2, y2);
+    }
+
+    private void drawWeightLabel(Graphics2D g2, Point from, Point to, long weight, boolean highlighted, double offset) {
+        double angle = Math.atan2(to.y - from.y, to.x - from.x);
+        double perpAngle = angle + Math.PI / 2;
+        int midX = (from.x + to.x) / 2 + (int) (offset * Math.cos(perpAngle));
+        int midY = (from.y + to.y) / 2 + (int) (offset * Math.sin(perpAngle));
+
+        String text = String.valueOf(weight);
+        g2.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        FontMetrics fm = g2.getFontMetrics();
+        int textWidth = fm.stringWidth(text);
+        int textHeight = fm.getHeight();
+
+        g2.setColor(Color.WHITE);
+        g2.fillRect(midX - textWidth / 2 - 2, midY - textHeight / 2, textWidth + 4, textHeight);
+        g2.setColor(highlighted ? Color.BLACK : new Color(120, 120, 120));
+        g2.drawString(text, midX - textWidth / 2, midY + fm.getAscent() / 2 - 2);
     }
 
     private void drawNodes(Graphics2D g2, Point[] positions) {
-        int nodeRadius = 16;
         g2.setFont(new Font("SansSerif", Font.BOLD, 12));
         for (int i = 0; i < positions.length; i++) {
             Point p = positions[i];
             g2.setColor(new Color(70, 90, 200));
-            g2.fillOval(p.x - nodeRadius, p.y - nodeRadius, nodeRadius * 2, nodeRadius * 2);
+            g2.fillOval(p.x - NODE_RADIUS, p.y - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
             g2.setColor(Color.WHITE);
             String label = String.valueOf(i);
             FontMetrics fm = g2.getFontMetrics();
             g2.drawString(label, p.x - fm.stringWidth(label) / 2, p.y + fm.getAscent() / 2 - 2);
         }
+    }
+
+    private Set<String> findBidirectionalPairs() {
+        Set<String> existing = new HashSet<>();
+        for (Edge edge : graph.edges()) {
+            existing.add(edge.from() + "," + edge.to());
+        }
+        Set<String> bidirectional = new HashSet<>();
+        for (Edge edge : graph.edges()) {
+            if (existing.contains(edge.to() + "," + edge.from())) {
+                bidirectional.add(pairKey(edge.from(), edge.to()));
+            }
+        }
+        return bidirectional;
+    }
+
+    // Clave sin importar el orden (1,2) y (2,1) deben dar la MISMA clave,
+// porque representan el mismo par de nodos
+    private String pairKey(int a, int b) {
+        return Math.min(a, b) + "-" + Math.max(a, b);
     }
 
     public Graph getGraph() {
