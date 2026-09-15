@@ -8,9 +8,8 @@ Bellman-Ford (Misión 3), y Kruskal con Union-Find (Misión 4).
 
 ## Integrantes del grupo
 
-- [Nombre 1]
-- [Nombre 2]
-- [Nombre 3]
+- Andrés Julián Baena Martínez
+- Juan Esteban Gómez Gómez
 
 ## Requisitos
 
