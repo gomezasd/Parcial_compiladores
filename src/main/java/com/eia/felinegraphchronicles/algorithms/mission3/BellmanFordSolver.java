@@ -65,6 +65,8 @@ public final class BellmanFordSolver {
                 cycle.add(node);
                 node = predecessor[node];
             } while (node != current && cycle.size() <= nodeCount);
+
+            java.util.Collections.reverse(cycle); // <-- FIX: sin esto, el orden queda invertido
             return cycle;
         }
     }

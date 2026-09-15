@@ -10,21 +10,28 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Dibuja el grafo de la Misión 3 en disposición circular, resaltando
- * la ruta (verde) o el ciclo (naranja) según corresponda. Respeta el
- * límite de la Sección 2.3: grafos de más de 60 nodos no se dibujan.
+ * Dibuja un grafo en disposición circular. Misión 3 lo usa dirigido
+ * (con flechas, resaltando ruta o ciclo); Misión 2 lo usa NO dirigido
+ * (sin flechas, resaltando la ruta más corta) llamando setDirected(false).
+ * Respeta el límite de la Sección 2.3: más de 60 nodos omite el dibujo.
  */
 public final class GraphRenderer extends JPanel {
 
     private static final int MAX_DRAWABLE_NODES = 60;
+    private static final int NODE_RADIUS = 16;
 
     private Graph graph;
     private List<Integer> highlightNodes = List.of();
     private boolean highlightIsCycle;
+    private boolean directed = true;
 
     public GraphRenderer() {
         setPreferredSize(new Dimension(450, 450));
         setBackground(Color.WHITE);
+    }
+
+    public void setDirected(boolean directed) {
+        this.directed = directed;
     }
 
     public void setData(Graph graph, List<Integer> highlightNodes, boolean highlightIsCycle) {
@@ -38,6 +45,10 @@ public final class GraphRenderer extends JPanel {
         this.graph = null;
         this.highlightNodes = List.of();
         repaint();
+    }
+
+    public Graph getGraph() {
+        return graph;
     }
 
     @Override
@@ -73,7 +84,6 @@ public final class GraphRenderer extends JPanel {
         int cx = getWidth() / 2;
         int cy = getHeight() / 2;
         int radius = Math.max(50, Math.min(getWidth(), getHeight()) / 2 - 40);
-
         for (int i = 0; i < n; i++) {
             double angle = 2 * Math.PI * i / n;
             positions[i] = new Point(
@@ -83,17 +93,22 @@ public final class GraphRenderer extends JPanel {
         return positions;
     }
 
-    // Pares (from->to) que forman parte de la ruta o del ciclo a resaltar
+    // Dirigido: respeta el sentido from->to. No dirigido: usa un par sin
+    // sentido, porque la ruta puede "recorrer" el par en cualquier dirección
+    // y graph.edges() solo guarda la arista en el sentido en que se agregó.
+    private String edgeKey(int from, int to) {
+        return directed ? (from + "->" + to) : pairKey(from, to);
+    }
+
     private Set<String> buildHighlightedEdgeSet() {
         Set<String> pairs = new HashSet<>();
         int size = highlightNodes.size();
         if (size < 2) return pairs;
-
         for (int i = 0; i < size - 1; i++) {
-            pairs.add(highlightNodes.get(i) + "->" + highlightNodes.get(i + 1));
+            pairs.add(edgeKey(highlightNodes.get(i), highlightNodes.get(i + 1)));
         }
         if (highlightIsCycle) {
-            pairs.add(highlightNodes.get(size - 1) + "->" + highlightNodes.get(0));
+            pairs.add(edgeKey(highlightNodes.get(size - 1), highlightNodes.get(0)));
         }
         return pairs;
     }
@@ -102,7 +117,7 @@ public final class GraphRenderer extends JPanel {
         Set<String> bidirectionalPairs = findBidirectionalPairs();
 
         for (Edge edge : graph.edges()) {
-            boolean highlighted = highlightedEdges.contains(edge.from() + "->" + edge.to());
+            boolean highlighted = highlightedEdges.contains(edgeKey(edge.from(), edge.to()));
             g2.setColor(highlighted
                     ? (highlightIsCycle ? new Color(230, 140, 30) : new Color(60, 160, 110))
                     : new Color(210, 210, 210));
@@ -110,14 +125,12 @@ public final class GraphRenderer extends JPanel {
 
             Point from = positions[edge.from()];
             Point to = positions[edge.to()];
-            double offset = bidirectionalPairs.contains(pairKey(edge.from(), edge.to())) ? 8 : 0;
+            double offset = directed && bidirectionalPairs.contains(pairKey(edge.from(), edge.to())) ? 8 : 0;
 
             drawArrow(g2, from, to, offset);
             drawWeightLabel(g2, from, to, edge.weight(), highlighted, offset);
         }
     }
-
-    private static final int NODE_RADIUS = 16; // debe coincidir con el radio usado en drawNodes
 
     private void drawArrow(Graphics2D g2, Point from, Point to, double offset) {
         double angle = Math.atan2(to.y - from.y, to.x - from.x);
@@ -125,10 +138,8 @@ public final class GraphRenderer extends JPanel {
         int offX = (int) (offset * Math.cos(perpAngle));
         int offY = (int) (offset * Math.sin(perpAngle));
 
-        int fx = from.x + offX;
-        int fy = from.y + offY;
-        int tx = to.x + offX;
-        int ty = to.y + offY;
+        int fx = from.x + offX, fy = from.y + offY;
+        int tx = to.x + offX, ty = to.y + offY;
 
         int endX = (int) (tx - NODE_RADIUS * Math.cos(angle));
         int endY = (int) (ty - NODE_RADIUS * Math.sin(angle));
@@ -136,6 +147,7 @@ public final class GraphRenderer extends JPanel {
         int startY = (int) (fy + NODE_RADIUS * Math.sin(angle));
 
         g2.drawLine(startX, startY, endX, endY);
+        if (!directed) return; // Misión 2: sin cabeza de flecha
 
         int arrowSize = 10;
         int x1 = (int) (endX - arrowSize * Math.cos(angle - Math.PI / 6));
@@ -179,9 +191,7 @@ public final class GraphRenderer extends JPanel {
 
     private Set<String> findBidirectionalPairs() {
         Set<String> existing = new HashSet<>();
-        for (Edge edge : graph.edges()) {
-            existing.add(edge.from() + "," + edge.to());
-        }
+        for (Edge edge : graph.edges()) existing.add(edge.from() + "," + edge.to());
         Set<String> bidirectional = new HashSet<>();
         for (Edge edge : graph.edges()) {
             if (existing.contains(edge.to() + "," + edge.from())) {
@@ -191,13 +201,7 @@ public final class GraphRenderer extends JPanel {
         return bidirectional;
     }
 
-    // Clave sin importar el orden (1,2) y (2,1) deben dar la MISMA clave,
-// porque representan el mismo par de nodos
     private String pairKey(int a, int b) {
         return Math.min(a, b) + "-" + Math.max(a, b);
-    }
-
-    public Graph getGraph() {
-        return graph;
     }
 }
